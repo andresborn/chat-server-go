@@ -5,8 +5,10 @@ import (
 )
 
 type Message struct {
-	From string
-	Text string
+	From  string
+	To    string
+	Text  string
+	Topic string
 }
 
 type Client struct {
@@ -15,8 +17,7 @@ type Client struct {
 	Outgoing chan Message // Client inbox. Server flushes out these messages to the client.
 }
 
-type PrivateMessage struct {
-	From string
-	Text string
-	To   string
+type Topic struct {
+	Subscribers []string // usernames
+	Name        string
 }

@@ -8,11 +8,12 @@ import (
 
 func Init() *Chatroom {
 	room := Chatroom{
-		Subscribe:   make(chan *models.Client),
-		Unsubscribe: make(chan *models.Client),
-		Broadcast:   make(chan models.Message),
-		Private:     make(chan models.PrivateMessage),
-		clients:     map[string]*models.Client{},
+		Join:      make(chan *models.Client),
+		Leave:     make(chan *models.Client),
+		Broadcast: make(chan models.Message),
+		Private:   make(chan models.Message),
+		Topic:     make(chan models.Message),
+		clients:   map[string]*models.Client{},
 	}
 	return &room
 }
@@ -36,12 +37,12 @@ func (cr *Chatroom) handleBroadcast(message models.Message) {
 		select {
 		case client.Outgoing <- message:
 		default:
-			log.Println("Message dropped for slow client: ", client.Username)
+			log.Println("Message dropped for slow client in broadcast: ", client.Username)
 		}
 	}
 }
 
-func (cr *Chatroom) handlePrivate(message models.PrivateMessage) {
+func (cr *Chatroom) handlePrivate(message models.Message) {
 	cr.mu.Lock()
 	if client, ok := cr.clients[message.To]; ok {
 		client.Outgoing <- models.Message{From: message.From, Text: message.Text}
@@ -51,13 +52,44 @@ func (cr *Chatroom) handlePrivate(message models.PrivateMessage) {
 	cr.mu.Unlock()
 }
 
-func (cr *Chatroom) handleSub(client *models.Client) {
+func (cr *Chatroom) handleTopic(message models.Message) {
+	defer cr.mu.Unlock()
+
+	// Create topic if it doesn't exist
+
+	cr.mu.Lock()
+	var topicSubs []string // Local copy
+	if topic, ok := cr.topics[message.Topic]; ok {
+		topicSubs = topic.Subscribers
+	} else {
+		// Write to sender that topic doesn't exist
+	}
+	cr.mu.Unlock()
+
+	cr.mu.Lock()
+	var clients []*models.Client
+	for _, sub := range topicSubs {
+		clients = append(clients, cr.clients[sub])
+	}
+	cr.mu.Unlock()
+
+	for _, client := range clients {
+		select {
+		case client.Outgoing <- message:
+		default:
+			log.Println("Message dropped for slow client in topic: ", client.Username)
+		}
+	}
+
+}
+
+func (cr *Chatroom) handleJoin(client *models.Client) {
 	cr.mu.Lock()
 	cr.clients[client.Username] = client
 	cr.mu.Unlock()
 }
 
-func (cr *Chatroom) handleUnsub(client *models.Client) {
+func (cr *Chatroom) handleLeave(client *models.Client) {
 	cr.mu.Lock()
 	delete(cr.clients, client.Username)
 	cr.mu.Unlock()

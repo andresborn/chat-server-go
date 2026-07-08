@@ -7,13 +7,21 @@ import (
 )
 
 type Chatroom struct {
+	// Join/Leave chatroom
+	Join  chan *models.Client
+	Leave chan *models.Client
+
 	// Channels
-	Subscribe   chan *models.Client
-	Unsubscribe chan *models.Client
-	Broadcast   chan models.Message
-	Private     chan models.PrivateMessage
+	Broadcast chan models.Message
+	Private   chan models.Message
+	Topic     chan models.Message
+
+	// Topic Subscribe/Unsubscribe channels
+	// Subscribe   chan models.Message
+	// Unsubscribe chan models.Message
 
 	// State
 	clients map[string]*models.Client
+	topics  map[string]*models.Topic
 	mu      sync.Mutex
 }

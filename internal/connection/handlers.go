@@ -46,7 +46,7 @@ func HandleConnection(conn net.Conn, cr *chatroom.Chatroom) {
 		client.Conn.Close()
 	}()
 
-	cr.Subscribe <- client
+	cr.Join <- client
 
 	go handleWrite(client)
 
@@ -54,7 +54,7 @@ func HandleConnection(conn net.Conn, cr *chatroom.Chatroom) {
 
 	// handleUnsub closes channel. cr.handleWrite finishes sending queued messages (which will most
 	// likely return an error), exits, unsubscribes, and finally connection closes on defer.
-	cr.Unsubscribe <- client
+	cr.Leave <- client
 
 }
 
@@ -113,7 +113,7 @@ func handleMessage(c *models.Client, cr *chatroom.Chatroom, fullText string) {
 		}
 		recipient := split[1]
 		content := strings.Join(split[2:], " ")
-		cr.Private <- models.PrivateMessage{From: c.Username, To: recipient, Text: content}
+		cr.Private <- models.Message{From: c.Username, To: recipient, Text: content}
 
 	case "/topic": // Topic: /topic <topic> <text>
 		if len(split) < 3 {
