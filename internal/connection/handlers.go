@@ -117,11 +117,27 @@ func handleMessage(c *models.Client, cr *chatroom.Chatroom, fullText string) {
 
 	case "/topic": // Topic: /topic <topic> <text>
 		if len(split) < 3 {
-			// Write to client "Wrong format"
-			// return
+			c.Conn.Write([]byte("For topic messages format should be: /topic <topic> <text>. \n"))
+			return
 		}
-		// username = split[1]
-		// content = strings.Join(split[2:], " ")
+		topic := split[1]
+		content := strings.Join(split[2:], " ")
+		cr.Topic <- models.Message{Topic: topic, Text: content, From: c.Username}
+
+	case "/subscribe":
+		if len(split) != 2 {
+			c.Conn.Write([]byte("To subscribe to a topic type: /subscribe <topic-name>"))
+			return
+		}
+		topic := split[1]
+		cr.Subscribe <- models.Message{From: c.Username, Topic: topic}
+	case "/unsubscribe":
+		if len(split) != 2 {
+			c.Conn.Write([]byte("To unsubscribe from a topic type: /unsubscribe <topic-name>"))
+			return
+		}
+		topic := split[1]
+		cr.Unsubscribe <- models.Message{From: c.Username, Topic: topic}
 	default:
 		c.Conn.Write([]byte(fmt.Sprintf("Not supported: %s \n", fullText)))
 	}

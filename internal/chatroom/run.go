@@ -14,7 +14,12 @@ func (cr *Chatroom) Run() {
 				cr.handlePrivate(message)
 			case message := <-cr.Topic:
 				cr.handleTopic(message)
+			case message := <-cr.Subscribe:
+				cr.handleTopicSubscribe(message)
+			case message := <-cr.Unsubscribe:
+				cr.handleTopicUnsubscribe(message)
 			}
+
 		}
 	}()
 }
