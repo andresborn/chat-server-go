@@ -11,6 +11,12 @@ type Message struct {
 
 type Client struct {
 	Conn     net.Conn
-	ID       string
+	Username string
 	Outgoing chan Message // Client inbox. Server flushes out these messages to the client.
+}
+
+type PrivateMessage struct {
+	From string
+	Text string
+	To   string
 }

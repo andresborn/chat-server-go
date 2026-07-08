@@ -2,9 +2,11 @@ package connection
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"net"
 	"strings"
+
 	"time"
 
 	"github.com/andresborn/chat-server-go/internal/chatroom"
@@ -12,16 +14,37 @@ import (
 )
 
 func HandleConnection(conn net.Conn, cr *chatroom.Chatroom) {
+	log.Printf("Client connection: %s\n", conn.RemoteAddr().String())
 
-	id := getId(conn)
-	client := &models.Client{Conn: conn, ID: id, Outgoing: make(chan models.Message, 16)}
+	// Prompt for username or reconnection
+	conn.Write([]byte("Enter username: \n"))
+
+	reader := bufio.NewReader(conn)
+	input, err := reader.ReadString('\n')
+	if err != nil {
+		log.Println("Failed to read username:", err)
+		return
+	}
+	input = strings.TrimSpace(input)
+
+	if input == "" {
+		conn.Write([]byte("Username can't be empty."))
+		return
+	}
+
+	if cr.ClientExists(input) {
+		conn.Write([]byte("Username already in use, pick another one."))
+		return
+	}
+
+	conn.Write([]byte(fmt.Sprintf("Welcome to the chatroom %s: \n", input)))
+
+	client := &models.Client{Conn: conn, Username: input, Outgoing: make(chan models.Message, 16)}
 
 	defer func() {
 		log.Printf("Closing connection with %s\n", conn.RemoteAddr().String())
 		client.Conn.Close()
 	}()
-
-	log.Printf("Client connection: %s\n", conn.RemoteAddr().String())
 
 	cr.Subscribe <- client
 
@@ -49,8 +72,13 @@ func handleRead(c *models.Client, cr *chatroom.Chatroom) {
 	scanner := bufio.NewScanner(c.Conn)
 
 	for scanner.Scan() {
-		message := models.Message{From: c.ID, Text: scanner.Text()}
-		cr.Broadcast <- message
+		text := scanner.Text()
+		if strings.HasPrefix(text, "/") {
+			handleMessage(c, cr, text)
+			continue
+		}
+		// Broadcast
+		cr.Broadcast <- models.Message{From: c.Username, Text: text}
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -65,6 +93,7 @@ func sendMessage(conn net.Conn, message models.Message) error {
 		log.Println(err)
 		return err
 	}
+
 	_, err = conn.Write([]byte(message.From + ": " + message.Text + "\n"))
 	if err != nil {
 		log.Println("Error sending message: ", err)
@@ -73,7 +102,28 @@ func sendMessage(conn net.Conn, message models.Message) error {
 	return nil
 }
 
-func getId(conn net.Conn) string {
-	id := strings.Split(conn.RemoteAddr().String(), ":")[1]
-	return id
+func handleMessage(c *models.Client, cr *chatroom.Chatroom, fullText string) {
+	split := strings.Split(fullText, " ")
+
+	switch split[0] {
+	case "/msg":
+		if len(split) < 3 {
+			c.Conn.Write([]byte("For private messages format should be: /msg <username> <text>. \n"))
+			return
+		}
+		recipient := split[1]
+		content := strings.Join(split[2:], " ")
+		cr.Private <- models.PrivateMessage{From: c.Username, To: recipient, Text: content}
+
+	case "/topic": // Topic: /topic <topic> <text>
+		if len(split) < 3 {
+			// Write to client "Wrong format"
+			// return
+		}
+		// username = split[1]
+		// content = strings.Join(split[2:], " ")
+	default:
+		c.Conn.Write([]byte(fmt.Sprintf("Not supported: %s \n", fullText)))
+	}
+
 }

@@ -11,6 +11,7 @@ type Chatroom struct {
 	Subscribe   chan *models.Client
 	Unsubscribe chan *models.Client
 	Broadcast   chan models.Message
+	Private     chan models.PrivateMessage
 
 	// State
 	clients map[string]*models.Client

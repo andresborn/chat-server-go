@@ -11,6 +11,7 @@ func Init() *Chatroom {
 		Subscribe:   make(chan *models.Client),
 		Unsubscribe: make(chan *models.Client),
 		Broadcast:   make(chan models.Message),
+		Private:     make(chan models.PrivateMessage),
 		clients:     map[string]*models.Client{},
 	}
 	return &room
@@ -21,7 +22,7 @@ func (cr *Chatroom) handleBroadcast(message models.Message) {
 	clients := make([]*models.Client, 0) // Local copy
 	cr.mu.Lock()
 	for _, client := range cr.clients {
-		if client.ID == message.From {
+		if client.Username == message.From {
 			continue
 		}
 		clients = append(clients, client)
@@ -35,20 +36,30 @@ func (cr *Chatroom) handleBroadcast(message models.Message) {
 		select {
 		case client.Outgoing <- message:
 		default:
-			log.Println("Message dropped for slow client: ", client.ID)
+			log.Println("Message dropped for slow client: ", client.Username)
 		}
 	}
 }
 
+func (cr *Chatroom) handlePrivate(message models.PrivateMessage) {
+	cr.mu.Lock()
+	if client, ok := cr.clients[message.To]; ok {
+		client.Outgoing <- models.Message{From: message.From, Text: message.Text}
+	} else {
+		cr.clients[message.From].Outgoing <- models.Message{From: "Server", Text: "User not found."}
+	}
+	cr.mu.Unlock()
+}
+
 func (cr *Chatroom) handleSub(client *models.Client) {
 	cr.mu.Lock()
-	cr.clients[client.ID] = client
+	cr.clients[client.Username] = client
 	cr.mu.Unlock()
 }
 
 func (cr *Chatroom) handleUnsub(client *models.Client) {
 	cr.mu.Lock()
-	delete(cr.clients, client.ID)
+	delete(cr.clients, client.Username)
 	cr.mu.Unlock()
 
 	// Close channel safely
@@ -58,4 +69,15 @@ func (cr *Chatroom) handleUnsub(client *models.Client) {
 	default:
 		close(client.Outgoing)
 	}
+}
+
+func (cr *Chatroom) ClientExists(id string) bool {
+	cr.mu.Lock()
+	defer cr.mu.Unlock()
+
+	if _, ok := cr.clients[id]; ok {
+		return true
+	}
+	return false
+
 }

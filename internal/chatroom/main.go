@@ -10,6 +10,8 @@ func (cr *Chatroom) Run() {
 				cr.handleUnsub(client)
 			case message := <-cr.Broadcast:
 				cr.handleBroadcast(message)
+			case privateMessage := <-cr.Private:
+				cr.handlePrivate(privateMessage)
 			}
 		}
 	}()
