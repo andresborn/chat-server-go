@@ -6,8 +6,8 @@ import (
 	"log"
 	"net"
 	"strings"
-
 	"time"
+	"unicode/utf8"
 
 	"github.com/andresborn/chat-server-go/internal/chatroom"
 	"github.com/andresborn/chat-server-go/internal/models"
@@ -15,6 +15,11 @@ import (
 
 func HandleConnection(conn net.Conn, cr *chatroom.Chatroom) {
 	log.Printf("Client connection: %s\n", conn.RemoteAddr().String())
+
+	defer func() {
+		log.Printf("Closing connection with %s\n", conn.RemoteAddr().String())
+		conn.Close()
+	}()
 
 	// Prompt for username or reconnection
 	conn.Write([]byte("Enter username: \n"))
@@ -27,24 +32,39 @@ func HandleConnection(conn net.Conn, cr *chatroom.Chatroom) {
 	}
 	input = strings.TrimSpace(input)
 
+	if len(strings.Fields(input)) > 1 {
+		conn.Write([]byte("Your username should have no spaces.\n"))
+		return
+	}
+
 	if input == "" {
-		conn.Write([]byte("Username can't be empty."))
+		conn.Write([]byte("Username can't be empty.\n"))
+		return
+	}
+
+	if !utf8.ValidString(input) {
+		conn.Write([]byte("Username needs to be valid UTF-8.\n"))
+		return
+	}
+
+	if len(input) > 20 {
+		conn.Write([]byte("Username can't be over 20 characters.\n"))
+		return
+	}
+
+	if strings.HasPrefix(input, "/") {
+		conn.Write([]byte("Username can't start with \"/\" \n"))
 		return
 	}
 
 	if cr.ClientExists(input) {
-		conn.Write([]byte("Username already in use, pick another one."))
+		conn.Write([]byte("Username already in use, pick another one.\n"))
 		return
 	}
 
-	conn.Write([]byte(fmt.Sprintf("Welcome to the chatroom %s: \n", input)))
+	conn.Write([]byte(fmt.Sprintf("Welcome to the chatroom %s. \n", input)))
 
 	client := &models.Client{Conn: conn, Username: input, Outgoing: make(chan models.Message, 16)}
-
-	defer func() {
-		log.Printf("Closing connection with %s\n", conn.RemoteAddr().String())
-		client.Conn.Close()
-	}()
 
 	cr.Join <- client
 
@@ -126,18 +146,22 @@ func handleMessage(c *models.Client, cr *chatroom.Chatroom, fullText string) {
 
 	case "/subscribe":
 		if len(split) != 2 {
-			c.Conn.Write([]byte("To subscribe to a topic type: /subscribe <topic-name>"))
+			c.Conn.Write([]byte("To subscribe to a topic type: /subscribe <topic-name>\n"))
 			return
 		}
 		topic := split[1]
 		cr.Subscribe <- models.Message{From: c.Username, Topic: topic}
 	case "/unsubscribe":
 		if len(split) != 2 {
-			c.Conn.Write([]byte("To unsubscribe from a topic type: /unsubscribe <topic-name>"))
+			c.Conn.Write([]byte("To unsubscribe from a topic type: /unsubscribe <topic-name>\n"))
 			return
 		}
 		topic := split[1]
 		cr.Unsubscribe <- models.Message{From: c.Username, Topic: topic}
+	case "/users":
+		cr.Commands <- models.Message{From: c.Username, Command: "users"}
+	case "/topics":
+		cr.Commands <- models.Message{From: c.Username, Command: "topics"}
 	default:
 		c.Conn.Write([]byte(fmt.Sprintf("Not supported: %s \n", fullText)))
 	}

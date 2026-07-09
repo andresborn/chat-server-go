@@ -5,10 +5,11 @@ import (
 )
 
 type Message struct {
-	From  string
-	To    string
-	Text  string
-	Topic string
+	From    string
+	To      string
+	Text    string
+	Topic   string
+	Command string // users or topics
 }
 
 type Client struct {

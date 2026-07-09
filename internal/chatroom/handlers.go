@@ -1,6 +1,7 @@
 package chatroom
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/andresborn/chat-server-go/internal/models"
@@ -14,6 +15,7 @@ func Init() *Chatroom {
 		Private:     make(chan models.Message),
 		Subscribe:   make(chan models.Message),
 		Unsubscribe: make(chan models.Message),
+		Commands:    make(chan models.Message),
 		Topic:       make(chan models.Message),
 		clients:     map[string]*models.Client{},
 		topics:      map[string]*models.Topic{},
@@ -70,9 +72,15 @@ func (cr *Chatroom) handleTopic(message models.Message) {
 	}
 
 	var clients []*models.Client
+	var updatedSubs []string
 	for _, sub := range topicSubs {
-		clients = append(clients, cr.clients[sub])
+		if c, ok := cr.clients[sub]; ok {
+			clients = append(clients, c)
+			updatedSubs = append(updatedSubs, sub)
+		}
 	}
+
+	cr.topics[message.Topic].Subscribers = updatedSubs // Remove clients that don't exist
 
 	for _, client := range clients {
 		select {
@@ -81,7 +89,6 @@ func (cr *Chatroom) handleTopic(message models.Message) {
 			log.Println("Message dropped for slow client in topic: ", client.Username)
 		}
 	}
-
 }
 
 func (cr *Chatroom) handleTopicSubscribe(message models.Message) {
@@ -134,6 +141,61 @@ func (cr *Chatroom) handleLeave(client *models.Client) {
 	default:
 		close(client.Outgoing)
 	}
+}
+
+func (cr *Chatroom) handleCommand(message models.Message) {
+	var res string
+
+	if message.Command == "users" {
+		res = cr.buildUsersResponse()
+	}
+
+	if message.Command == "topics" {
+		res = cr.buildTopicsResponse()
+	}
+
+	if res == "" {
+		log.Println("Command not found.")
+		return
+	}
+
+	cr.mu.Lock()
+	if c, ok := cr.clients[message.From]; ok {
+		c.Outgoing <- models.Message{From: "Server", Text: res}
+	}
+	cr.mu.Unlock()
+
+}
+
+func (cr *Chatroom) buildUsersResponse() string {
+	cr.mu.Lock()
+	clients := make([]models.Client, len(cr.clients))
+	for _, c := range cr.clients {
+		clients = append(clients, *c)
+	}
+	cr.mu.Unlock()
+
+	// Build message
+	var response string
+	for _, c := range clients {
+		response += fmt.Sprintln(c.Username)
+	}
+	return response
+}
+
+func (cr *Chatroom) buildTopicsResponse() string {
+	cr.mu.Lock()
+	topics := make([]models.Topic, len(cr.topics))
+	for _, t := range cr.topics {
+		topics = append(topics, *t)
+	}
+	cr.mu.Unlock()
+
+	var response string
+	for _, t := range topics {
+		response += fmt.Sprintf("Topic: %s, Subscriber count: %v\n", t.Name, len(t.Subscribers))
+	}
+	return response
 }
 
 func (cr *Chatroom) ClientExists(id string) bool {

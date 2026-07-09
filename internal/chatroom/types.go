@@ -20,6 +20,9 @@ type Chatroom struct {
 	Subscribe   chan models.Message
 	Unsubscribe chan models.Message
 
+	// Commands channel
+	Commands chan models.Message
+
 	// State
 	clients map[string]*models.Client
 	topics  map[string]*models.Topic

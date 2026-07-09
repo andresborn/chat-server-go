@@ -18,6 +18,8 @@ func (cr *Chatroom) Run() {
 				cr.handleTopicSubscribe(message)
 			case message := <-cr.Unsubscribe:
 				cr.handleTopicUnsubscribe(message)
+			case message := <-cr.Commands:
+				cr.handleCommand(message)
 			}
 
 		}
