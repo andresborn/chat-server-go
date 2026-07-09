@@ -111,7 +111,7 @@ func (cr *Chatroom) handleTopicUnsubscribe(message models.Message) {
 	defer cr.mu.Unlock()
 
 	if topic, ok := cr.topics[message.Topic]; ok {
-		updatedSubs := make([]string, len(topic.Subscribers)-1)
+		updatedSubs := make([]string, 0)
 		for i := range topic.Subscribers {
 			if topic.Subscribers[i] != message.From {
 				updatedSubs = append(updatedSubs, topic.Subscribers[i])
@@ -169,7 +169,7 @@ func (cr *Chatroom) handleCommand(message models.Message) {
 
 func (cr *Chatroom) buildUsersResponse() string {
 	cr.mu.Lock()
-	clients := make([]models.Client, len(cr.clients))
+	clients := make([]models.Client, 0)
 	for _, c := range cr.clients {
 		clients = append(clients, *c)
 	}
@@ -185,9 +185,9 @@ func (cr *Chatroom) buildUsersResponse() string {
 
 func (cr *Chatroom) buildTopicsResponse() string {
 	cr.mu.Lock()
-	topics := make([]models.Topic, len(cr.topics))
+	topics := make([]models.Topic, 0)
 	for _, t := range cr.topics {
-		topics = append(topics, *t)
+		topics = append(topics, models.Topic{Name: t.Name, Subscribers: t.Subscribers})
 	}
 	cr.mu.Unlock()
 

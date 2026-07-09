@@ -12,4 +12,5 @@ We'll also build a Go reverse-proxy for load balancing and we'll deploy 3 replic
 - [X] Verify usernames: reject empty, reject special characters, reject more than 20 character names
 - [X] Create `/users` command to list connected users
 - [X] Create `/topics` command to list available topics and sub count
-- [ ] Fix: Blank topics are being created.
+- [X] Fix: Blank topics are being created.
+- [ ] Format messages according to their type.
